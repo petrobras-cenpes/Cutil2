@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CUTIL - Diagrama de Topologia</title>
+    <!-- Importando a biblioteca Vis.js -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; font-family: Arial, sans-serif; }
+        #topologia { width: 100%; height: 100vh; background-color: #1e1e1e; }
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 20px; }
+    </style>
+</head>
+<body>
+
+    <div id="loading">Carregando diagrama elétrico...</div>
+    <div id="topologia"></div>
+
+    <script>
+        // Função para carregar e processar o JSON
+        async function carregarDiagrama() {
+            try {
+                // Aqui o script puxa o seu arquivo data.json
+                const response = await fetch('data.json');
+                const rawData = await response.json();
+
+                const nodesSet = new Map();
+                const edges = [];
+
+                // Função auxiliar para criar nós únicos
+                function addNode(id, label, grupo, cor) {
+                    if (id && !nodesSet.has(id)) {
+                        nodesSet.set(id, { 
+                            id: id, 
+                            label: label, 
+                            group: grupo,
+                            color: { background: cor, border: '#ffffff' },
+                            font: { color: '#ffffff' }
+                        });
+                    }
+                }
+
+                // Processando cada linha do seu data.json
+                rawData.forEach(item => {
+                    // Usando sua lógica de normalização
+                    const vemDe = item["Vem de "] || item["Vem de"];
+                    const painel = item["Painel"];
+                    const disjuntor = item["Disjuntor"];
+                    const alimenta = item["Alimenta"] || item["Vai para"];
+                    
+                    // Cria um ID único para o disjuntor atual (Ex: PN-5142002 | 52.SC1)
+                    const idAtual = `${painel} | ${disjuntor}`;
+                    
+                    // 1. Adiciona os Nós (Nodes)
+                    if (vemDe) addNode(vemDe, vemDe, 'origem', '#e74c3c'); // Vermelho para origens
+                    addNode(idAtual, `${disjuntor}\n(${painel})`, 'disjuntor', '#3498db'); // Azul para o disjuntor
+                    if (alimenta) addNode(alimenta, alimenta, 'carga', '#2ecc71'); // Verde para a carga/destino
+
+                    // 2. Adiciona as Conexões (Edges / Setas)
+                    if (vemDe) {
+                        edges.push({ from: vemDe, to: idAtual, arrows: 'to', color: '#7f8c8d' });
+                    }
+                    if (alimenta) {
+                        edges.push({ from: idAtual, to: alimenta, arrows: 'to', color: '#7f8c8d' });
+                    }
+                });
+
+                // Convertendo o Map de nós para um array que o Vis.js entende
+                const nodes = Array.from(nodesSet.values());
+
+                // Configurando e renderizando o gráfico
+                const container = document.getElementById('topologia');
+                const data = { nodes: nodes, edges: edges };
+                const options = {
+                    layout: {
+                        hierarchical: {
+                            direction: 'UD', // UD = Up-Down (De cima para baixo)
+                            sortMethod: 'directed', // Organiza baseado no fluxo de energia
+                            nodeSpacing: 150,
+                            levelSeparation: 200
+                        }
+                    },
+                    physics: false, // Desliga a "gravidade" para a árvore ficar estática e organizada
+                    interaction: {
+                        dragNodes: true,
+                        zoomView: true,
+                        dragView: true
+                    }
+                };
+
+                // Esconde o loading e desenha a rede
+                document.getElementById('loading').style.display = 'none';
+                new vis.Network(container, data, options);
+
+            } catch (error) {
+                console.error("Erro ao carregar os dados:", error);
+                document.getElementById('loading').innerText = "Erro ao carregar data.json. Verifique o console.";
+            }
+        }
+
+        carregarDiagrama();
+    </script>
+</body>
+</html>
