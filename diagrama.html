@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CUTIL - Topologia e Busca</title>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; font-family: Arial, sans-serif; overflow: hidden; background-color: #1e1e1e; }
+        #topologia { width: 100%; height: 100vh; }
+        
+        #painel-controle {
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(0,0,0,0.85); padding: 15px; border-radius: 8px;
+            color: white; font-size: 14px; z-index: 100; border: 1px solid #444;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .busca-container { margin-top: 15px; border-top: 1px solid #555; padding-top: 15px; }
+        input[type="text"] { 
+            padding: 8px; width: 200px; border-radius: 4px; 
+            border: 1px solid #555; background: #333; color: white; outline: none;
+        }
+        button { 
+            padding: 8px 12px; cursor: pointer; border-radius: 4px; border: none; 
+            background: #3498db; color: white; font-weight: bold; margin-left: 5px;
+        }
+        button:hover { background: #2980b9; }
+        #msg-erro { display: none; color: #e74c3c; margin-top: 8px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    
+    <div id="painel-controle">
+        <h3 style="margin: 0 0 10px 0; font-size: 16px;">Legenda CUTIL</h3>
+        <div style="color: #e74c3c;">◼ Origem (Vem de)</div>
+        <div style="color: #3498db;">◼ Disjuntor / Painel</div>
+        <div style="color: #2ecc71;">◼ Carga (Alimenta)</div>
+        
+        <div class="busca-container">
+            <input type="text" id="inputBusca" placeholder="Ex: Chiller, 52.SC1..." />
+            <button onclick="buscarNo()">Buscar</button>
+            <div id="msg-erro"></div>
+        </div>
+    </div>
+
+    <div id="topologia"></div>
+
+    <script>
+        let rede = null;
+        let todosNos = [];
+
+        async function carregarDiagrama() {
+            try {
+                const response = await fetch('https://raw.githubusercontent.com/Users\BE2Z\OneDrive - PETROBRAS\Área de Trabalho\Cutil 2);
+                if (!response.ok) throw new Error("Não foi possível ler o data.json");
+                
+                const rawData = await response.json();
+                const nodesSet = new Map();
+                const edges = [];
+
+                function addNode(id, label, grupo, cor) {
+                    if (id && String(id).trim() !== "" && !nodesSet.has(id)) {
+                        nodesSet.set(id, { 
+                            id: id, label: label, group: grupo,
+                            color: { background: cor, border: '#ffffff' },
+                            font: { color: '#ffffff' }, shape: 'box'
+                        });
+                    }
+                }
+
+                rawData.forEach(raw => {
+                    const painel = raw["Painel"] ? String(raw["Painel"]).trim() : "";
+                    const disjuntor = raw["Disjuntor"] ? String(raw["Disjuntor"]).trim() : "";
+                    const vem_de = raw["Vem de"] ? String(raw["Vem de"]).trim() : "";
+                    const vai_para = raw["Alimenta"] ? String(raw["Alimenta"]).trim() : "";
+                    
+                    if(painel) {
+                        const idAtual = disjuntor ? `${painel} | ${disjuntor}` : painel;
+                        const labelAtual = disjuntor ? `${disjuntor}\n(${painel})` : painel;
+                        
+                        if (vem_de) addNode(vem_de, vem_de, 'origem', '#e74c3c');
+                        addNode(idAtual, labelAtual, 'disjuntor', '#3498db');
+                        if (vai_para) addNode(vai_para, vai_para, 'carga', '#2ecc71');
+
+                        // setas
+                        if (vem_de) edges.push({ from: vem_de, to: idAtual, arrows: 'to', color: '#7f8c8d' });
+                        if (vai_para) edges.push({ from: idAtual, to: vai_para, arrows: 'to', color: '#7f8c8d' });
+                    }
+                });
+
+                todosNos = Array.from(nodesSet.values());
+                const container = document.getElementById('topologia');
+                const data = { nodes: todosNos, edges: edges };
+                
+                const options = {
+                    // Aqui está o segredo: Desligamos o Hierarchical e ativamos a Física de repulsão
+                    physics: {
+                        enabled: true,
+                        barnesHut: {
+                            gravitationalConstant: -2500, // Força que afasta um nó do outro
+                            springLength: 150, // Comprimento da "linha" de energia
+                            springConstant: 0.04
+                        },
+                        stabilization: { iterations: 150 } // Tenta estabilizar antes de mostrar
+                    },
+                    interaction: { dragNodes: true, zoomView: true, hover: true }
+                };
+
+                rede = new vis.Network(container, data, options);
+
+            } catch (error) {
+                console.error("Erro:", error);
+                document.body.innerHTML = `<div style="background: white; padding: 20px; color: red;">
+                    <h2>Erro ao carregar o gráfico:</h2>
+                    <p>${error.message}</p>
+                    <p>Você está acessando pelo link do GitHub Pages (https://...)?</p>
+                </div>`;
+            }
+        }
+
+        function buscarNo() {
+            const termo = document.getElementById('inputBusca').value.toLowerCase().trim();
+            const msgErro = document.getElementById('msg-erro');
+            msgErro.style.display = 'none';
+
+            if (!termo) return;
+
+            const noEncontrado = todosNos.find(n => 
+                String(n.label).toLowerCase().includes(termo) || 
+                String(n.id).toLowerCase().includes(termo)
+            );
+
+            if (noEncontrado) {
+                rede.focus(noEncontrado.id, {
+                    scale: 1.5,
+                    animation: { duration: 1000, easingFunction: "easeInOutQuad" }
+                });
+                rede.selectNodes([noEncontrado.id]);
+            } else {
+                msgErro.innerText = 'Componente não encontrado!';
+                msgErro.style.display = 'block';
+            }
+        }
+
+        document.getElementById('inputBusca').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') buscarNo();
+        });
+
+        carregarDiagrama();
+    </script>
+</body>
+</html>
