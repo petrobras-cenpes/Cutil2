@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Diagnóstico CUTIL</title>
+    <!-- Servidor alternativo da biblioteca -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body { background: #111; color: white; font-family: sans-serif; padding: 20px; }
+        #tela-erro { color: #ff4444; font-size: 18px; font-weight: bold; border: 2px solid red; padding: 15px; display: none; background: #222; }
+        #topologia { width: 100%; height: 400px; background: #1e1e1e; margin-top: 20px; border: 1px solid #555; }
+    </style>
+</head>
+<body>
+    <h2>Teste de Diagnóstico da Topologia</h2>
+    <div id="tela-erro"></div>
+    <div id="topologia"></div>
+
+    <script>
+        // 1. CAPTURADOR DE ERROS (Vai jogar o erro na tela em vez de esconder no F12)
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            const painel = document.getElementById('tela-erro');
+            painel.style.display = 'block';
+            painel.innerHTML += `🚨 <b>ERRO FATAL:</b> ${msg} <br>📍 <b>Linha:</b> ${lineNo}<br><hr>`;
+            return false;
+        };
+
+        // 2. TENTA RODAR O GRÁFICO BÁSICO DEPOIS DE 1 SEGUNDO
+        setTimeout(function() {
+            try {
+                if (typeof vis === 'undefined') {
+                    throw new Error("A biblioteca Vis.js foi BLOQUEADA pelo firewall ou não carregou!");
+                }
+                
+                const container = document.getElementById('topologia');
+                const data = {
+                    nodes: [{ id: 1, label: 'SE ISSO APARECEU,\nO SISTEMA FUNCIONA!', shape: 'box', color: '#2ecc71', font: {color: 'white'} }],
+                    edges: []
+                };
+                
+                new vis.Network(container, data, {});
+                
+            } catch (e) {
+                const painel = document.getElementById('tela-erro');
+                painel.style.display = 'block';
+                painel.innerHTML += `🚨 <b>ERRO CAPTURADO:</b> ${e.message}<br>`;
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
